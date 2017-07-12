@@ -24,10 +24,12 @@ HUNK_HEADER = re.compile(r"^-(\d+),(\d+) \+(\d+),(\d+) @@.*")
 FILE_SEP = re.compile(r"^--- ", re.MULTILINE)
 HUNK_SEP = re.compile(r"^@@ ", re.MULTILINE)
 
-
-no_change = np.array([1, 1], dtype=int)
-add_line = np.array([1, 0], dtype=int)
-remove_line = np.array([0, 1], dtype=int)
+MOVE = {
+    ' ': np.array([1, 1], dtype=int),
+    '+': np.array([1, 0], dtype=int),
+    '-': np.array([0, 1], dtype=int)
+}
+no_change = MOVE[' ']
 
 
 def parse_diff(branch, changeset_id):
@@ -72,11 +74,7 @@ def parse_diff(branch, changeset_id):
                 d = line[0]
                 if d == ' ':
                     coord.append(copy(c))
-                    c += no_change
-                elif d == '+':
-                    c += add_line
-                elif d == '-':
-                    c += remove_line
+                c += MOVE[d]
 
         response = http.get(expand_template(GET_FILE, {"location": branch.url, "rev": changeset_id, "path": file_path}))
         doc = BeautifulSoup(response.content)
@@ -85,7 +83,7 @@ def parse_diff(branch, changeset_id):
         new_length = len(code)
         maxx = np.max(coord, 0)
         old_length = new_length + (maxx[1] - maxx[0])
-        matrix = np.zeros((new_length + 1, old_length + 1), dtype=bool)
+        matrix = np.zeros((new_length + 1, old_length + 1), dtype=np.uint8)
         matrix[zip(*coord)] = 1
 
         output[file_path] = matrix
