@@ -10,13 +10,12 @@ from __future__ import unicode_literals
 
 import re
 
+import numpy as np
+from BeautifulSoup import BeautifulSoup
 from mo_logs import Log
 from mo_logs.strings import expand_template
 from numpy import copy
 from pyLibrary.env import http
-from BeautifulSoup import BeautifulSoup
-import numpy as np
-from scipy.sparse import coo_matrix, csr_matrix
 
 GET_DIFF = "{{location}}/rev/{{rev}}"
 GET_FILE = "{{location}}/file/{{rev}}{{path}}"
@@ -33,11 +32,41 @@ MOVE = {
 no_change = MOVE[' ']
 
 
-def parse_diff(branch, changeset_id):
+def parse_to_matrix(branch, changeset_id):
+    map = _parse_diff(branch, changeset_id)
+    output = {}
+    for file_path, coord in map.items():
+        maxx = np.max(coord, 0)
+        matrix = np.zeros(maxx + 1, dtype=np.uint8)
+        matrix[zip(*coord)] = 1
+        output[file_path] = matrix
+    return output
+
+
+def parse_to_map(branch, changeset_id):
     """
+    MATRICIES ARE O(n^2), TRY AN O(n) SOLUTION
+    
     :param branch: OBJECT TO DESCRIBE THE BRANCH TO PULL INFO
     :param changeset_id: THE REVISION NUMEBR OF THE CHANGESET
     :return:  MAP FROM FULL PATH TO OPERATOR
+    """
+
+    map = _parse_diff(branch, changeset_id)
+    output = {}
+    for file_path, coord in map.items():
+        maxx = np.max(coord, 0)
+        matrix = np.zeros(maxx + 1, dtype=np.uint8)
+        matrix[zip(*coord)] = 1
+        output[file_path] = matrix
+    return output
+
+
+def _parse_diff(branch, changeset_id):
+    """
+    :param branch: OBJECT TO DESCRIBE THE BRANCH TO PULL INFO
+    :param changeset_id: THE REVISION NUMEBR OF THE CHANGESET
+    :return:  MAP FROM FULL PATH TO LIST OF COORINATES
     """
     output = {}
 
@@ -89,8 +118,12 @@ def parse_diff(branch, changeset_id):
             coord.append(copy(c))
             c += no_change
 
-        matrix = np.zeros(dims, dtype=np.uint8)
-        matrix[zip(*coord)] = 1
-
-        output[file_path] = matrix
+        output[file_path] = coord
     return output
+
+
+class Diff(object):
+
+    def __init__(self, coord):
+        self.coord = np.array(coord)
+
