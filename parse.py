@@ -16,6 +16,7 @@ from numpy import copy
 from pyLibrary.env import http
 from BeautifulSoup import BeautifulSoup
 import numpy as np
+from scipy.sparse import coo_matrix, csr_matrix
 
 GET_DIFF = "{{location}}/rev/{{rev}}"
 GET_FILE = "{{location}}/file/{{rev}}{{path}}"
@@ -83,7 +84,12 @@ def parse_diff(branch, changeset_id):
         new_length = len(code)
         maxx = np.max(coord, 0)
         old_length = new_length + (maxx[1] - maxx[0])
-        matrix = np.zeros((new_length + 1, old_length + 1), dtype=np.uint8)
+        dims = np.array([new_length + 1, old_length + 1], dtype=int)
+        while c[0] < dims[0]:
+            coord.append(copy(c))
+            c += no_change
+
+        matrix = np.zeros(dims, dtype=np.uint8)
         matrix[zip(*coord)] = 1
 
         output[file_path] = matrix
