@@ -90,29 +90,3 @@ def parse_diff(branch, changeset_id):
 
         output[file_path] = matrix
     return output
-
-
-    # --- a/testing/marionette/harness/marionette_harness/tests/unit/unit-tests.ini
-    # +++ b/testing/marionette/harness/marionette_harness/tests/unit/unit-tests.ini
-    # @@ -4,17 +4,17 @@ skip-if = manage_instance == false || ap
-    #  [test_geckoinstance.py]
-    #  [test_data_driven.py]
-    #  [test_session.py]
-    #  [test_capabilities.py]
-    #  [test_accessibility.py]
-    #  [test_expectedfail.py]
-    #  expected = fail
-    #  [test_click.py]
-    # -skip-if = debug && e10s # Bug 1360446
-    # +skip-if = e10s # Bug 1360446
-    #  [test_click_chrome.py]
-    #  skip-if = appname == 'fennec'
-    #  [test_checkbox.py]
-    #  [test_checkbox_chrome.py]
-    #  skip-if = appname == 'fennec'
-    #  [test_elementsize.py]
-    #  [test_elementsize_chrome.py]
-    #  skip-if = appname == 'fennec'
-
-    # SPLIT BY FILE
-    # S
