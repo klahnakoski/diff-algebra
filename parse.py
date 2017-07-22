@@ -34,20 +34,14 @@ no_change = MOVE[' ']
 
 def parse_rev_to_matrix(branch, changeset_id, new_source_code=None):
     """
-    :param branch:  Data with `url` parameter poiting to hg instance 
+    :param branch:  Data with `url` parameter pointing to hg instance 
     :param changeset_id:   
     :param new_source_code:  for testing - provide the resulting file (for file length only) 
     :return: 
     """
     diff = _get_changeset(branch, changeset_id)
     map = _parse_diff(diff, new_source_code)
-    output = {}
-    for file_path, coord in map.items():
-        maxx = np.max(coord, 0)
-        matrix = np.zeros(maxx + 1, dtype=np.uint8)
-        matrix[zip(*coord)] = 1
-        output[file_path] = matrix.T
-    return output
+    return _map_to_matrix(map)
 
 
 def parse_diff_to_matrix(diff, new_source_code=None):
@@ -56,13 +50,16 @@ def parse_diff_to_matrix(diff, new_source_code=None):
     :param new_source_code:  for testing - provide the resulting file (for file length only) 
     :return: 
     """
-    map = _parse_diff(diff, new_source_code)
+    return _map_to_matrix(_parse_diff(diff, new_source_code))
+
+
+def _map_to_matrix(map):
     output = {}
     for file_path, coord in map.items():
         maxx = np.max(coord, 0)
         matrix = np.zeros(maxx + 1, dtype=np.uint8)
         matrix[zip(*coord)] = 1
-        output[file_path] = matrix
+        output[file_path] = matrix.T  # OOPS! coordinates were reversed
     return output
 
 
@@ -75,13 +72,13 @@ def parse_to_map(branch, changeset_id):
     :return:  MAP FROM FULL PATH TO OPERATOR
     """
 
-    map = _parse_diff(branch, changeset_id)
+    map = _parse_diff(_get_changeset(branch, changeset_id))
     output = {}
     for file_path, coord in map.items():
         maxx = np.max(coord, 0)
         matrix = np.zeros(maxx + 1, dtype=np.uint8)
         matrix[zip(*coord)] = 1
-        output[file_path] = matrix
+        output[file_path] = matrix.T
     return output
 
 

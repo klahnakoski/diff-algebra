@@ -1,1 +1,3 @@
 pyLibrary
+numpy
+scipy
