@@ -18,6 +18,8 @@ from parse import parse_diff_to_matrix
 
 class TestParsing(FuzzyTestCase):
     def test_parse(self):
+        # file1 -> c1 -> file2 -> c2 -> file3
+
         file1 = File("tests/resources/example_file_v1.py").read().split('\n')
         file2 = File("tests/resources/example_file_v2.py").read().split('\n')
         file3 = File("tests/resources/example_file_v3.py").read().split('\n')
@@ -25,11 +27,18 @@ class TestParsing(FuzzyTestCase):
         c1 = parse_diff_to_matrix(
             diff=File("tests/resources/diff1.patch").read(),
             new_source_code=file2
-        )
+        )["/tests/resources/example_file.py"]
 
         c2 = parse_diff_to_matrix(
-            diff=File("tests/resources/diff1.patch").read(),
+            diff=File("tests/resources/diff2.patch").read(),
             new_source_code=file3
-        )
+        )["/tests/resources/example_file.py"]
 
-        coverage2 = np.array([1, 0, 1, 1, 0, 0, 1, 1, 1, 0], dtype=int)
+        coverage2 = np.array([1, 1, 0, 1, 1, 0, 0, 1, 1, 1, 0, 0], dtype=int).T
+
+        coverage1 = np.dot(coverage2, c1.T)
+        coverage3 = np.dot(coverage2, c2)
+
+        self.assertEqual(coverage1, [1, 1, 0, 1,       0, 1, 1, 1, 0])
+        self.assertEqual(coverage2, [1, 1, 0, 1, 1, 0, 0, 1, 1, 1, 0, 0])
+        self.assertEqual(coverage3, [1, 0, 0, 0, 0])

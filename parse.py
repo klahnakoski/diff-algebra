@@ -46,7 +46,7 @@ def parse_rev_to_matrix(branch, changeset_id, new_source_code=None):
         maxx = np.max(coord, 0)
         matrix = np.zeros(maxx + 1, dtype=np.uint8)
         matrix[zip(*coord)] = 1
-        output[file_path] = matrix
+        output[file_path] = matrix.T
     return output
 
 
@@ -118,11 +118,11 @@ def _parse_diff(changeset, new_source_code=None):
         for hunk in HUNK_SEP.split(file_diff)[1:]:
             line_diffs = hunk.split("\n")
             old_start, old_length, new_start, new_length = HUNK_HEADER.match(line_diffs[0]).groups()
-            next_c = np.array([new_start, old_start], dtype=int)
+            next_c = np.array([int(new_start)-1, int(old_start)-1], dtype=int)
             if next_c[0] - next_c[1] != c[0] - c[1]:
                 Log.error("expecting a skew of {{skew}}", skew=next_c[0] - next_c[1])
-            if c[0] >= next_c[0]:
-                Log.error("can not hanlde out-of-order diffs")
+            if c[0] > next_c[0]:
+                Log.error("can not handle out-of-order diffs")
             while c[0] != next_c[0]:
                 coord.append(copy(c))
                 c += no_change
@@ -142,10 +142,7 @@ def _parse_diff(changeset, new_source_code=None):
         else:
             new_length = len(new_source_code)
 
-        maxx = np.max(coord, 0)
-        old_length = new_length + (maxx[1] - maxx[0])
-        dims = np.array([new_length + 1, old_length + 1], dtype=int)
-        while c[0] < dims[0]:
+        while c[0] < new_length:
             coord.append(copy(c))
             c += no_change
 
