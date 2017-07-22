@@ -32,8 +32,31 @@ MOVE = {
 no_change = MOVE[' ']
 
 
-def parse_to_matrix(branch, changeset_id):
-    map = _parse_diff(branch, changeset_id)
+def parse_rev_to_matrix(branch, changeset_id, new_source_code=None):
+    """
+    :param branch:  Data with `url` parameter poiting to hg instance 
+    :param changeset_id:   
+    :param new_source_code:  for testing - provide the resulting file (for file length only) 
+    :return: 
+    """
+    diff = _get_changeset(branch, changeset_id)
+    map = _parse_diff(diff, new_source_code)
+    output = {}
+    for file_path, coord in map.items():
+        maxx = np.max(coord, 0)
+        matrix = np.zeros(maxx + 1, dtype=np.uint8)
+        matrix[zip(*coord)] = 1
+        output[file_path] = matrix
+    return output
+
+
+def parse_diff_to_matrix(diff, new_source_code=None):
+    """
+    :param diff:  textual diff 
+    :param new_source_code:  for testing - provide the resulting file (for file length only) 
+    :return: 
+    """
+    map = _parse_diff(diff, new_source_code)
     output = {}
     for file_path, coord in map.items():
         maxx = np.max(coord, 0)
@@ -62,31 +85,37 @@ def parse_to_map(branch, changeset_id):
     return output
 
 
-def _parse_diff(branch, changeset_id):
+def _get_changeset(branch, changeset_id):
+    response = http.get(expand_template(GET_DIFF, {"location": branch.url, "rev": changeset_id}))
+    doc = BeautifulSoup(response.content)
+    changeset = "".join(unicode(l) for t in doc.findAll("pre", {"class": "sourcelines"}) for l in t.findAll(text=True))
+    return changeset
+
+
+def get_source_code(branch, changeset_id, file_path):
+    response = http.get(expand_template(GET_FILE, {"location": branch.url, "rev": changeset_id, "path": file_path}))
+    doc = BeautifulSoup(response.content)
+    code = "".join(unicode(l) for t in doc.findAll("pre", {"class": "sourcelines stripes"}) for l in t.findAll(text=True)).split("\n")
+    return code
+
+
+def _parse_diff(changeset, new_source_code=None):
     """
     :param branch: OBJECT TO DESCRIBE THE BRANCH TO PULL INFO
     :param changeset_id: THE REVISION NUMEBR OF THE CHANGESET
+    :param new_source_code:  for testing - provide the resulting file (for file length only) 
     :return:  MAP FROM FULL PATH TO LIST OF COORINATES
     """
     output = {}
 
-    response = http.get(expand_template(GET_DIFF, {"location": branch.url, "rev": changeset_id}))
-
-    doc = BeautifulSoup(response.content)
-    changeset = "".join(unicode(l) for t in doc.findAll("pre", {"class": "sourcelines"}) for l in t.findAll(text=True))
-
     files = FILE_SEP.split(changeset)
-    for file in files:
-        if not file.strip():
-            continue
+    for file in files[1:]:
         file_header_a, file_header_b, file_diff = file.split("\n", 2)
         file_path = file_header_a[1:]  # eg file_header_a == "a/testing/marionette/harness/marionette_harness/tests/unit/unit-tests.ini"
 
         coord = []
         c = np.array([0,0], dtype=int)
-        for hunk in HUNK_SEP.split(file_diff):
-            if not hunk:
-                continue
+        for hunk in HUNK_SEP.split(file_diff)[1:]:
             line_diffs = hunk.split("\n")
             old_start, old_length, new_start, new_length = HUNK_HEADER.match(line_diffs[0]).groups()
             next_c = np.array([new_start, old_start], dtype=int)
@@ -106,11 +135,13 @@ def _parse_diff(branch, changeset_id):
                     coord.append(copy(c))
                 c += MOVE[d]
 
-        response = http.get(expand_template(GET_FILE, {"location": branch.url, "rev": changeset_id, "path": file_path}))
-        doc = BeautifulSoup(response.content)
-        code = "".join(unicode(l) for t in doc.findAll("pre", {"class": "sourcelines stripes"}) for l in t.findAll(text=True)).split("\n")
+        # WE ONLY NEED THE NUMBER OF CODE LINES SO WE KNOW THE CODE DIMENSIONS SO WE CAN MAKE THE MATRIX
+        # A MORE EFFICIENT IMPLEMENTATION COULD WORK WITHOUT KNOWING THE LENGTH OF THE SOURCE
+        if new_source_code is None:
+            new_length = len(get_source_code(branch, changeset_id, file_path))
+        else:
+            new_length = len(new_source_code)
 
-        new_length = len(code)
         maxx = np.max(coord, 0)
         old_length = new_length + (maxx[1] - maxx[0])
         dims = np.array([new_length + 1, old_length + 1], dtype=int)
@@ -121,9 +152,4 @@ def _parse_diff(branch, changeset_id):
         output[file_path] = coord
     return output
 
-
-class Diff(object):
-
-    def __init__(self, coord):
-        self.coord = np.array(coord)
 

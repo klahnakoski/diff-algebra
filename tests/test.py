@@ -9,21 +9,27 @@
 from __future__ import absolute_import
 from __future__ import unicode_literals
 
-from mo_dots import Data
+import numpy as np
+from mo_files import File
 from mo_testing.fuzzytestcase import FuzzyTestCase
 
-from parse import parse_to_matrix
+from parse import parse_diff_to_matrix
 
 
 class TestParsing(FuzzyTestCase):
-
     def test_parse(self):
-        result = parse_to_matrix(Data(url="https://hg.mozilla.org/integration/mozilla-inbound"), changeset_id="17f8bf61f6e9")
+        file1 = File("tests/resources/example_file_v1.py").read().split('\n')
+        file2 = File("tests/resources/example_file_v2.py").read().split('\n')
+        file3 = File("tests/resources/example_file_v3.py").read().split('\n')
 
-        expected = {
+        c1 = parse_diff_to_matrix(
+            diff=File("tests/resources/diff1.patch").read(),
+            new_source_code=file2
+        )
 
-        }
+        c2 = parse_diff_to_matrix(
+            diff=File("tests/resources/diff1.patch").read(),
+            new_source_code=file3
+        )
 
-        self.assertEqual(result, expected)
-
-
+        coverage2 = np.array([1, 0, 1, 1, 0, 0, 1, 1, 1, 0], dtype=int)
