@@ -45,7 +45,7 @@ def parse_to_matrix(branch, changeset_id):
 
 def parse_to_map(branch, changeset_id):
     """
-    MATRICIES ARE O(n^2), TRY AN O(n) SOLUTION
+    MATRICIES ARE O(n^2), WE NEED A O(n) SOLUTION
     
     :param branch: OBJECT TO DESCRIBE THE BRANCH TO PULL INFO
     :param changeset_id: THE REVISION NUMEBR OF THE CHANGESET
