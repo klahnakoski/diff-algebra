@@ -34,11 +34,11 @@ class TestParsing(FuzzyTestCase):
             new_source_code=file3
         )["/tests/resources/example_file.py"]
 
-        coverage2 = np.array([1, 1, 0, 1, 1, 0, 0, 1, 1, 1, 0, 0], dtype=int).T
+        coverage2 = np.matrix([1, 1, 0, 1, 1, 0, 0, 1, 1, 1, 0, 0], dtype=int)
 
-        coverage1 = np.dot(coverage2, c1.T)
-        coverage3 = np.dot(coverage2, c2)
+        coverage1 = coverage2 * c1.T
+        coverage3 = coverage2 * c2
 
-        self.assertEqual(coverage1, [1, 1, 0, 1,       0, 1, 1, 1, 0])
-        self.assertEqual(coverage2, [1, 1, 0, 1, 1, 0, 0, 1, 1, 1, 0, 0])
-        self.assertEqual(coverage3, [1, 0, 0, 0, 0])
+        self.assertEqual(coverage1.tolist(), [[1, 1, 0, 1,       0, 1, 1, 1, 0, 0]])
+        self.assertEqual(coverage2.tolist(), [[1, 1, 0, 1, 1, 0, 0, 1, 1, 1, 0, 0]])
+        self.assertEqual(coverage3.tolist(), [[1, 0, 0, 0, 0]])
