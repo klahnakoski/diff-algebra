@@ -46,25 +46,39 @@ class TestParsing(FuzzyTestCase):
 
         self.assertEqual(coverage1.tolist(), [[1, 1, 0, 1,       0, 1, 1, 1, 0, 0]])
         self.assertEqual(coverage2.tolist(), [[1, 1, 0, 1, 1, 0, 0, 1, 1, 1, 0, 0]])
-        self.assertEqual(coverage3.tolist(), [[1, 1, 0, 1, 1, 0, 0, 0]])
+        self.assertEqual(coverage3.tolist(), [[1, 1, 0, 1, 1, 0, 0, 0, 0]])
 
     def test_net_new_lines(self):
         file1, c1, file2, c2, file3 = self._data()
 
         # NET NEW LINES CAN BE EXTRACTED FROM A CHANGESET 1==New line, 0==Old line
-        net_new_lines = (- np.sum(c1, 0)) + 1
+        net_new_lines = (- np.sum(c1, 0)) + 1  # MAYBE THIS SHOULD BE A FUNCTION CALLED net_new_lines(changeset)
 
         self.assertEqual(net_new_lines.tolist(), [0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0])
 
     def test_net_new_percent(self):
         file1, c1, file2, c2, file3 = self._data()
 
+        net_new_lines2 = (- np.sum(c1, 0)) + 1  # MAYBE THIS SHOULD BE A FUNCTION CALLED net_new_lines(changeset)
+        num_net_new_lines = np.sum(net_new_lines2)
+
         coverage2 = np.array([1, 1, 0, 1, 1, 0, 0, 1, 1, 1, 0, 0], dtype=int)
-        net_new_lines = (- np.sum(c1, 0)) + 1
+        # MULTIPLY net_new_lines WITH THE coverage2 VECTOR TO GET INTERSECTION
+        # sum THE INTERSECTION TO GET A COUNT
+        # MAYBE WE SHOULD BE USING BOOLEAN ARRAYS EVERYWHERE
+        num_net_new_lines_covered = np.sum(coverage2 * net_new_lines2)
 
-        num_net_new_lines = np.sum(net_new_lines)
-        num_net_new_lines_covered = np.sum(coverage2 * net_new_lines)
         net_new_percent = num_net_new_lines_covered / num_net_new_lines
-
         self.assertEqual(net_new_percent, 0.5)
 
+    def test_percent_2(self):
+        file1, c1, file2, c2, file3 = self._data()
+
+        coverage3 = np.matrix([1, 1, 1, 1, 1, 1, 1, 1, 1], dtype=int)
+
+        coverage2 = coverage3 * c2.T
+        net_new_lines2 = np.matrix((- np.sum(c1, 0)) + 1)
+        num_net_new_lines_covered = np.sum(coverage2 * net_new_lines2.T)
+
+        net_new_percent = num_net_new_lines_covered / np.sum(net_new_lines2)
+        self.assertEqual(net_new_percent, 1)
