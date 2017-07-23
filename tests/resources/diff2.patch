@@ -1,15 +1,11 @@
 diff --git a/tests/resources/example_file.py b/tests/resources/example_file.py
-index 7cc10ae..5566c5b 100644
+index 7cc10ae..70ad7bc 100644
 --- a/tests/resources/example_file.py
 +++ b/tests/resources/example_file.py
-@@ -1,11 +1,4 @@
- # THIS IS TEST FILE
--import time
+@@ -5,7 +5,4 @@ a = time.time()
+ b = "hello world"
  
--a = time.time()
--b = "hello world"
- 
--# SOME COMMENTS WILL HELP READER DEAL WITH THE COMPLEXITY
+ # SOME COMMENTS WILL HELP READER DEAL WITH THE COMPLEXITY
 -if a < 1.5 * 1000 * 1000 * 1000:
 -    print "the past"
 -else:

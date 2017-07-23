@@ -8,6 +8,7 @@
 #
 from __future__ import absolute_import
 from __future__ import unicode_literals
+from __future__ import division
 
 import numpy as np
 from mo_files import File
@@ -17,9 +18,7 @@ from parse import parse_diff_to_matrix
 
 
 class TestParsing(FuzzyTestCase):
-    def test_parse(self):
-        # file1 -> c1 -> file2 -> c2 -> file3
-
+    def _data(self):
         file1 = File("tests/resources/example_file_v1.py").read().split('\n')
         file2 = File("tests/resources/example_file_v2.py").read().split('\n')
         file3 = File("tests/resources/example_file_v3.py").read().split('\n')
@@ -34,6 +33,12 @@ class TestParsing(FuzzyTestCase):
             new_source_code=file3
         )["/tests/resources/example_file.py"]
 
+        # file1 -> c1 -> file2 -> c2 -> file3
+        return file1, c1, file2, c2, file3
+
+    def test_parse(self):
+        file1, c1, file2, c2, file3 = self._data()
+
         coverage2 = np.matrix([1, 1, 0, 1, 1, 0, 0, 1, 1, 1, 0, 0], dtype=int)
 
         coverage1 = coverage2 * c1.T
@@ -41,4 +46,25 @@ class TestParsing(FuzzyTestCase):
 
         self.assertEqual(coverage1.tolist(), [[1, 1, 0, 1,       0, 1, 1, 1, 0, 0]])
         self.assertEqual(coverage2.tolist(), [[1, 1, 0, 1, 1, 0, 0, 1, 1, 1, 0, 0]])
-        self.assertEqual(coverage3.tolist(), [[1, 0, 0, 0, 0]])
+        self.assertEqual(coverage3.tolist(), [[1, 1, 0, 1, 1, 0, 0, 0]])
+
+    def test_net_new_lines(self):
+        file1, c1, file2, c2, file3 = self._data()
+
+        # NET NEW LINES CAN BE EXTRACTED FROM A CHANGESET 1==New line, 0==Old line
+        net_new_lines = (- np.sum(c1, 0)) + 1
+
+        self.assertEqual(net_new_lines.tolist(), [0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0])
+
+    def test_net_new_percent(self):
+        file1, c1, file2, c2, file3 = self._data()
+
+        coverage2 = np.array([1, 1, 0, 1, 1, 0, 0, 1, 1, 1, 0, 0], dtype=int)
+        net_new_lines = (- np.sum(c1, 0)) + 1
+
+        num_net_new_lines = np.sum(net_new_lines)
+        num_net_new_lines_covered = np.sum(coverage2 * net_new_lines)
+        net_new_percent = num_net_new_lines_covered / num_net_new_lines
+
+        self.assertEqual(net_new_percent, 0.5)
+
