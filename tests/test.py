@@ -71,13 +71,15 @@ class TestParsing(FuzzyTestCase):
         net_new_percent = num_net_new_lines_covered / num_net_new_lines
         self.assertEqual(net_new_percent, 0.5)
 
-    def test_percent_2(self):
+    def test_percent_using_future_coverage(self):
         file1, c1, file2, c2, file3 = self._data()
 
+        # WE ARE GIVE FUTURE COVERAGE
         coverage3 = np.matrix([1, 1, 1, 1, 1, 1, 1, 1, 1], dtype=int)
-
+        # CALCULATE THE COVERAGE FOR REVISION 2
         coverage2 = coverage3 * c2.T
-        net_new_lines2 = np.matrix((- np.sum(c1, 0)) + 1)
+        # THE NET NEW LINES FOR REVISION 2
+        net_new_lines2 = np.matrix((- np.sum(c1, 0)) + 1)  # THE MATRIX WILL ALLOW TRANSPOSES
         num_net_new_lines_covered = np.sum(coverage2 * net_new_lines2.T)
 
         net_new_percent = num_net_new_lines_covered / np.sum(net_new_lines2)
