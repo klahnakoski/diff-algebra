@@ -99,7 +99,7 @@ def get_source_code(branch, changeset_id, file_path):
 def _parse_diff(changeset, new_source_code=None):
     """
     :param branch: OBJECT TO DESCRIBE THE BRANCH TO PULL INFO
-    :param changeset_id: THE REVISION NUMEBR OF THE CHANGESET
+    :param changeset: THE DIFF TEXT CONTENT
     :param new_source_code:  for testing - provide the resulting file (for file length only) 
     :return:  MAP FROM FULL PATH TO LIST OF COORINATES
     """
@@ -145,5 +145,58 @@ def _parse_diff(changeset, new_source_code=None):
 
         output[file_path] = coord
     return output
+
+
+def normalize(changeset):
+    """
+    CONVERT DIFF TO EASY-TO-STORE JSON FORMAT
+    :param changeset: text
+    :return: JSON details
+    """
+
+    output = []
+    files = FILE_SEP.split(changeset)
+    for file_ in files[1:]:
+        changes = []
+        old_file_header, new_file_header, file_diff = file_.split("\n", 2)
+        old_file_path = old_file_header[1:]  # eg old_file_header == "a/testing/marionette/harness/marionette_harness/tests/unit/unit-tests.ini"
+        new_file_path = new_file_header[5:]  # eg new_file_header == "+++ b/tests/resources/example_file.py"
+
+        coord = []
+        c = np.array([0,0], dtype=int)
+        for hunk in HUNK_SEP.split(file_diff)[1:]:
+            line_diffs = hunk.split("\n")
+            old_start, old_length, new_start, new_length = HUNK_HEADER.match(line_diffs[0]).groups()
+            next_c = np.array([int(new_start)-1, int(old_start)-1], dtype=int)
+            if next_c[0] - next_c[1] != c[0] - c[1]:
+                Log.error("expecting a skew of {{skew}}", skew=next_c[0] - next_c[1])
+            if c[0] > next_c[0]:
+                Log.error("can not handle out-of-order diffs")
+            while c[0] != next_c[0]:
+                coord.append(copy(c))
+                c += no_change
+
+            for line in line_diffs[1:]:
+                if not line:
+                    continue
+                d = line[0]
+                if d == '+':
+                    changes.append({"new": {"line": c[0], "content": line[1:]}})
+                elif d == '-':
+                    changes.append({"old": {"line": c[1], "content": line[1:]}})
+                c += MOVE[d]
+
+        output.append({
+            "new": {"name": new_file_path},
+            "old": {"name": old_file_path},
+            "changes": changes
+        })
+    return output
+
+
+
+
+
+
 
 

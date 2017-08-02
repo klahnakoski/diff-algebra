@@ -14,7 +14,7 @@ import numpy as np
 from mo_files import File
 from mo_testing.fuzzytestcase import FuzzyTestCase
 
-from parse import parse_diff_to_matrix
+from parse import parse_diff_to_matrix, normalize
 
 
 class TestParsing(FuzzyTestCase):
@@ -48,6 +48,12 @@ class TestParsing(FuzzyTestCase):
         self.assertEqual(coverage2.tolist(), [[1, 1, 0, 1, 1, 0, 0, 1, 1, 1, 0, 0]])
         self.assertEqual(coverage3.tolist(), [[1, 1, 0, 1, 1, 0, 0, 0, 0]])
 
+    def test_normalize(self):
+        j1 = normalize(File("tests/resources/diff1.patch").read())
+        j2 = normalize(File("tests/resources/diff2.patch").read())
+
+        self.assertEqual(j1, {})
+
     def test_net_new_lines(self):
         file1, c1, file2, c2, file3 = self._data()
 
@@ -74,7 +80,7 @@ class TestParsing(FuzzyTestCase):
     def test_percent_using_future_coverage(self):
         file1, c1, file2, c2, file3 = self._data()
 
-        # WE ARE GIVE FUTURE COVERAGE
+        # WE ARE GIVEN FUTURE COVERAGE
         coverage3 = np.matrix([1, 1, 1, 1, 1, 1, 1, 1, 1], dtype=int)
         # CALCULATE THE COVERAGE FOR REVISION 2
         coverage2 = coverage3 * c2.T
