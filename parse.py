@@ -32,7 +32,7 @@ MOVE = {
 no_change = MOVE[' ']
 
 
-def parse_rev_to_matrix(branch, changeset_id, new_source_code=None):
+def parse_changeset_to_matrix(branch, changeset_id, new_source_code=None):
     """
     :param branch:  Data with `url` parameter pointing to hg instance 
     :param changeset_id:   
@@ -84,7 +84,8 @@ def parse_to_map(branch, changeset_id):
 
 def _get_changeset(branch, changeset_id):
     response = http.get(expand_template(GET_DIFF, {"location": branch.url, "rev": changeset_id}))
-    doc = BeautifulSoup(response.content)
+    with Timer("parsing http diff"):
+        doc = BeautifulSoup(response.content)
     changeset = "".join(unicode(l) for t in doc.findAll("pre", {"class": "sourcelines"}) for l in t.findAll(text=True))
     return changeset
 
@@ -147,7 +148,12 @@ def _parse_diff(changeset, new_source_code=None):
     return output
 
 
-def normalize(changeset):
+def changeset_to_json(branch, changeset_id, new_source_code=None):
+    diff = _get_changeset(branch, changeset_id)
+    return diff_to_json(diff)
+
+
+def diff_to_json(changeset):
     """
     CONVERT DIFF TO EASY-TO-STORE JSON FORMAT
     :param changeset: text
