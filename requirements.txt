@@ -1,3 +1,4 @@
 pyLibrary
+BeautifulSoup
 numpy
 scipy

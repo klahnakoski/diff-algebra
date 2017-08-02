@@ -13,6 +13,7 @@ from __future__ import division
 import numpy as np
 from mo_dots import Data
 from mo_files import File
+from mo_json import value2json
 from mo_testing.fuzzytestcase import FuzzyTestCase
 from mozillapulse.messages import hg
 
@@ -56,10 +57,14 @@ class TestParsing(FuzzyTestCase):
 
         self.assertEqual(j1, {})
 
+    def test_big_changeset_to_json(self):
+        j1 = diff_to_json(File("tests/resources/big.patch").read())
+        json = value2json(j1, pretty=True)
+        self.assertEqual(j1, {})
+
     def test_changeset_to_json(self):
         j1 = changeset_to_json(Data(url="https://hg.mozilla.org/mozilla-central"), "e5693cea1ec944ca0")
         self.assertEqual(j1, {})
-
 
     def test_net_new_lines(self):
         file1, c1, file2, c2, file3 = self._data()
