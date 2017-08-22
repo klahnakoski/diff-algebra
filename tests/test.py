@@ -7,17 +7,18 @@
 # Author: Kyle Lahnakoski (kyle@lahnakoski.com)
 #
 from __future__ import absolute_import
-from __future__ import unicode_literals
 from __future__ import division
+from __future__ import unicode_literals
 
 import numpy as np
 from mo_dots import Data
 from mo_files import File
-from mo_json import value2json
+from mo_logs import constants
 from mo_testing.fuzzytestcase import FuzzyTestCase
-from mozillapulse.messages import hg
 
 from parse import parse_diff_to_matrix, diff_to_json, changeset_to_json
+
+constants.set({"pyLibrary": {"env": {"http": {"default_headers": {"Referer": "https://github.com/klahnakoski/diff-algebra"}}}}})
 
 
 class TestParsing(FuzzyTestCase):
@@ -59,7 +60,7 @@ class TestParsing(FuzzyTestCase):
 
     def test_big_changeset_to_json(self):
         j1 = diff_to_json(File("tests/resources/big.patch").read())
-        expected = File("tests/resources/big.patch").read_json()
+        expected = File("tests/resources/big.json").read_json()
         self.assertEqual(j1, expected)
 
     def test_changeset_to_json(self):

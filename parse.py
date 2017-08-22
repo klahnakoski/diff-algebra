@@ -13,6 +13,7 @@ import re
 
 import numpy as np
 from BeautifulSoup import BeautifulSoup, SoupStrainer
+from mo_files import File
 from mo_logs import Log
 from mo_logs.strings import expand_template
 from mo_times import Timer
@@ -157,6 +158,7 @@ def _parse_diff(changeset, new_source_code=None):
 
 def changeset_to_json(branch, changeset_id, new_source_code=None):
     diff = _get_changeset(branch, changeset_id)
+    File("tests/resources/big.patch").write(diff)
     return diff_to_json(diff)
 
 
