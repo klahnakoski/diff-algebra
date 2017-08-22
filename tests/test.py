@@ -59,8 +59,8 @@ class TestParsing(FuzzyTestCase):
 
     def test_big_changeset_to_json(self):
         j1 = diff_to_json(File("tests/resources/big.patch").read())
-        json = value2json(j1, pretty=True)
-        self.assertEqual(j1, {})
+        expected = File("tests/resources/big.patch").read_json()
+        self.assertEqual(j1, expected)
 
     def test_changeset_to_json(self):
         j1 = changeset_to_json(Data(url="https://hg.mozilla.org/mozilla-central"), "e5693cea1ec944ca0")
