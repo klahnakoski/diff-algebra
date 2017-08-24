@@ -13,8 +13,10 @@ from __future__ import unicode_literals
 import numpy as np
 from mo_dots import Data, wrap
 from mo_files import File
+from mo_json import value2json
 from mo_logs import constants, Log, startup
 from mo_testing.fuzzytestcase import FuzzyTestCase
+from mo_threads import Thread
 from pyLibrary.env import elasticsearch
 
 from mo_hg.hg_branches import _get_branches_from_hg
@@ -41,6 +43,9 @@ class TestParsing(FuzzyTestCase):
 
     def setUp(self):
         self.hg = HgMozillaOrg(TestParsing.config)
+
+    def tearDown(self):
+        Thread.current().join()  # TRICK TO CLEAN UP CHILD THREADS
 
     def _data(self):
         file1 = File("tests/resources/example_file_v1.py").read().split('\n')
@@ -80,7 +85,7 @@ class TestParsing(FuzzyTestCase):
 
     def test_big_changeset_to_json(self):
         j1 = diff_to_json(File("tests/resources/big.patch").read())
-        expected = File("tests/resources/big.json").read_json()
+        expected = File("tests/resources/big.json").read_json(flexible=False, leaves=False)
         self.assertEqual(j1, expected)
 
     def test_changeset_to_json(self):
@@ -88,7 +93,8 @@ class TestParsing(FuzzyTestCase):
             "branch": {"name":"mozilla-central", "url": "https://hg.mozilla.org/mozilla-central"},
             "changeset": {"id": "e5693cea1ec944ca0"}
         }))
-        expected = File("tests/resources/big.json").read_json()
+        File("tests/resources/big.json").write(value2json(j1.changeset.diff, pretty=True))
+        expected = File("tests/resources/big.json").read_json(flexible=False, leaves=False)
         self.assertEqual(j1.changeset.diff, expected)
 
     def test_net_new_lines(self):
@@ -127,7 +133,5 @@ class TestParsing(FuzzyTestCase):
 
         net_new_percent = num_net_new_lines_covered / np.sum(net_new_lines2)
         self.assertEqual(net_new_percent, 1)
-
-
 
 

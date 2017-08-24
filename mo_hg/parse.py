@@ -60,8 +60,13 @@ def diff_to_json(unified_diff):
             for line in line_diffs[1:]:
                 if not line:
                     continue
-                if line.startswith("new file mode") or line.startswith("deleted file mode") or line.startswith("index "):
+                if line.startswith("new file mode") or \
+                    line.startswith("deleted file mode") or \
+                    line.startswith("index ") or \
+                    line.startswith("diff --git") \
+                    :
                     # HAPPENS AT THE TOP OF NEW FILES
+                    # diff --git a/security/sandbox/linux/SandboxFilter.cpp b/security/sandbox/linux/SandboxFilter.cpp
                     # u'new file mode 100644'
                     # u'deleted file mode 100644'
                     # index a763e390731f5379ddf5fa77090550009a002d13..798826525491b3d762503a422b1481f140238d19

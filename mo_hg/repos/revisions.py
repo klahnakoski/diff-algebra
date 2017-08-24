@@ -87,6 +87,17 @@ revision_schema = {
                         "description": {
                             "index": "analyzed",
                             "type": "string"
+                        },
+                        "diff": {
+                            "type": "nested",
+                            "dynamic": True,
+                            "properties": {
+                                "changes": {
+                                    "type": "nested",
+                                    "dynamic": "true"
+                                }
+
+                            }
                         }
                     }
                 }

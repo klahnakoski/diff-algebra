@@ -14,11 +14,11 @@ import re
 from copy import copy
 
 import mo_threads
-from BeautifulSoup import SoupStrainer, BeautifulSoup
+from BeautifulSoup import BeautifulSoup
 from future.utils import text_type
-from future.moves.html.parser import HTMLParser
 from jx_python import jx
 from mo_dots import set_default, Null, coalesce, unwraplist, Data
+from mo_files import File
 from mo_kwargs import override
 from mo_logs import Log, strings
 from mo_logs.exceptions import Explanation, assert_no_exception, Except
@@ -54,10 +54,10 @@ def _late_imports():
 
 
 DEFAULT_LOCALE = "en-US"
-DEBUG = False
+DEBUG = True
 
 GET_DIFF = "{{location}}/raw-rev/{{rev}}"
-GET_FILE = "{{location}}/file/{{rev}}{{path}}"
+GET_FILE = "{{location}}/raw-file/{{rev}}{{path}}"
 
 
 last_called_url = {}
@@ -82,6 +82,7 @@ class HgMozillaOrg(object):
         if not _hg_branches:
             _late_imports()
 
+        self.es_locker = Lock()
         self.todo = mo_threads.Queue("todo")
 
         self.settings = kwargs
@@ -148,7 +149,7 @@ class HgMozillaOrg(object):
 
         output = Data(revision=None, signal=Signal())
         worker = Thread.run("find "+revision.changeset.id, self._load_all_in_push, output, revision, locale)
-        (output.signal | worker.stopped).wait()
+        worker.join()
         if output.signal:
             return output.revision
         else:
@@ -252,21 +253,11 @@ class HgMozillaOrg(object):
                         last_called_url.clear()
                         last_called_url[url] = raw_revs
                     for r in raw_revs.values():
-                        if please_stop:
-                            return
-                        rev = self._normalize_revision(r, found_revision, push)
-                        _id = coalesce(rev.changeset.id12, "") + "-" + rev.branch.name + "-" + coalesce(rev.branch.locale, DEFAULT_LOCALE)
-                        self.es.add({"id": _id, "value": rev})
-                        if r.node == found_revision.changeset.id:
-                            output.revision = rev
-                            output.signal.go()
-                        elif r.node[0:12] == found_revision.changeset.id[0:12]:
-                            output.revision = rev
-                            output.signal.go()
+                        Thread.run(r.node, self._normalize_revision, output, r, found_revision, push, please_stop=please_stop)
 
             return output
 
-    def _normalize_revision(self, r, found_revision, push):
+    def _normalize_revision(self, output, r, found_revision, push, please_stop):
         rev = Revision(
             branch=found_revision.branch,
             index=r.rev,
@@ -284,11 +275,26 @@ class HgMozillaOrg(object):
             push=push,
             etl={"timestamp": Date.now().unix}
         )
-        self.todo.extend(rev.changeset.parents)
-        self.todo.extend(rev.changeset.children)
         # ADD THE DIFF
         diff = self._get_unified_diff_from_hg(rev)
+        # if r.node.startswith("e5693cea1ec944ca0"):
+        #     File("tests/resources/big.patch").write(diff)
         rev.changeset.diff = diff_to_json(diff)
+
+        _id = coalesce(rev.changeset.id12, "") + "-" + rev.branch.name + "-" + coalesce(rev.branch.locale, DEFAULT_LOCALE)
+        with self.es_locker:
+            self.todo.extend(rev.changeset.parents)
+            self.todo.extend(rev.changeset.children)
+            self.es.add({"id": _id, "value": rev})
+        if r.node == found_revision.changeset.id:
+            output.revision = rev
+            output.signal.go()
+        elif r.node[0:12] == found_revision.changeset.id[0:12]:
+            output.revision = rev
+            output.signal.go()
+
+
+
 
         return rev
 
@@ -389,24 +395,15 @@ class HgMozillaOrg(object):
         :param revision: INOMPLETE REVISION OBJECT 
         :return: 
         """
-        unescape = HTMLParser().unescape
         response = http.get(expand_template(GET_DIFF, {"location": revision.branch.url, "rev": revision.changeset.id}))
-
-
-        
-        with Timer("parsing http diff"):
-            doc = BeautifulSoup(
-                response.content,
-                parseOnlyThese=SoupStrainer("pre", {"class": "sourcelines"})
-            )
-        changeset = "".join(unescape(text_type(l)).rstrip("\r") for l in doc.findAll(text=True))
-        return changeset
+        try:
+            return response.content.decode("utf8", "replace")
+        except Exception as e:
+            Log.error("can not decode", cause=e)
 
     def _get_source_code_from_hg(self, revision, file_path):
         response = http.get(expand_template(GET_FILE, {"location": revision.branch.url, "rev": revision.changeset.id, "path": file_path}))
-        doc = BeautifulSoup(response.content)
-        code = "".join(text_type(l) for t in doc.findAll("pre", {"class": "sourcelines stripes"}) for l in t.findAll(text=True)).split("\n")
-        return code
+        return response.content.decode("utf8", "replace")
 
 
 
