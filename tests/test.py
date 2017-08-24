@@ -11,17 +11,37 @@ from __future__ import division
 from __future__ import unicode_literals
 
 import numpy as np
-from mo_dots import Data
+from mo_dots import Data, wrap
 from mo_files import File
-from mo_logs import constants
+from mo_logs import constants, Log, startup
 from mo_testing.fuzzytestcase import FuzzyTestCase
+from pyLibrary.env import elasticsearch
 
-from parse import parse_diff_to_matrix, diff_to_json, changeset_to_json
+from mo_hg.hg_branches import _get_branches_from_hg
+from mo_hg.hg_mozilla_org import HgMozillaOrg
+from mo_hg.parse import diff_to_json
+from parse import parse_diff_to_matrix
 
-constants.set({"pyLibrary": {"env": {"http": {"default_headers": {"Referer": "https://github.com/klahnakoski/diff-algebra"}}}}})
 
 
 class TestParsing(FuzzyTestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        try:
+            cls.config = startup.read_settings()
+            constants.set(cls.config.constants)
+            Log.start(cls.config.debug)
+        except Exception as e:
+            Log.error("Problem with etl", e)
+
+    @classmethod
+    def tearDownClass(cls):
+        Log.stop()
+
+    def setUp(self):
+        self.hg = HgMozillaOrg(TestParsing.config)
+
     def _data(self):
         file1 = File("tests/resources/example_file_v1.py").read().split('\n')
         file2 = File("tests/resources/example_file_v2.py").read().split('\n')
@@ -64,8 +84,12 @@ class TestParsing(FuzzyTestCase):
         self.assertEqual(j1, expected)
 
     def test_changeset_to_json(self):
-        j1 = changeset_to_json(Data(url="https://hg.mozilla.org/mozilla-central"), "e5693cea1ec944ca0")
-        self.assertEqual(j1, {})
+        j1 = self.hg.get_revision(wrap({
+            "branch": {"name":"mozilla-central", "url": "https://hg.mozilla.org/mozilla-central"},
+            "changeset": {"id": "e5693cea1ec944ca0"}
+        }))
+        expected = File("tests/resources/big.json").read_json()
+        self.assertEqual(j1.changeset.diff, expected)
 
     def test_net_new_lines(self):
         file1, c1, file2, c2, file3 = self._data()
@@ -103,3 +127,7 @@ class TestParsing(FuzzyTestCase):
 
         net_new_percent = num_net_new_lines_covered / np.sum(net_new_lines2)
         self.assertEqual(net_new_percent, 1)
+
+
+
+
