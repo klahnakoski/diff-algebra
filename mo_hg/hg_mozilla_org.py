@@ -15,12 +15,12 @@ from copy import copy
 
 import mo_threads
 from BeautifulSoup import BeautifulSoup
-from future.utils import text_type
+from future.utils import text_type, binary_type
 from jx_python import jx
 from mo_dots import set_default, Null, coalesce, unwraplist, Data
 from mo_files import File
 from mo_kwargs import override
-from mo_logs import Log, strings
+from mo_logs import Log, strings, machine_metadata
 from mo_logs.exceptions import Explanation, assert_no_exception, Except
 from mo_logs.strings import expand_template
 from mo_math.randoms import Random
@@ -103,30 +103,14 @@ class HgMozillaOrg(object):
 
         self.branches = _hg_branches.get_branches(kwargs=kwargs)
 
-        # TO ESTABLISH DATA
-        self.es.add({"id": "b3649fd5cd7a-mozilla-inbound-en-US", "value": {
-            "index": 247152,
-            "branch": {
-                "name": "mozilla-inbound",
-                "locale": DEFAULT_LOCALE
-            },
-            "changeset": {
-                "id": "b3649fd5cd7a76506d2cf04f45e39cbc972fb553",
-                "id12": "b3649fd5cd7a",
-                "author": "ryan",
-                "description": "Backed out changeset 7d0d8d304cd8 (bug 1171357) for bustage.",
-                "date": 1433429100,
-                "files": ["gfx/thebes/gfxTextRun.cpp"]
-            },
-            "push": {
-                "id": 60618,
-                "user": "ryan",
-                "date": 1433429138
-            },
-            "parents": ["7d0d8d304cd871f657effcc2d21d4eae5155fd1b"],
-            "children": ["411a9af141781c3c8fa883287966a4af348dbca8"]
-        }})
-        self.es.flush()
+        Thread.run("hg daemon", self._daemon)
+
+    def _daemon(self, please_stop):
+        while not please_stop:
+            with Explanation("getting extra revision"):
+                r = self.todo.pop(till=please_stop)
+                output = Data(signal=Signal(), revision=None)
+                self._load_all_in_push(output, r, locale=None, please_stop=please_stop)
 
     @cache(duration=HOUR, lock=True)
     def get_revision(self, revision, locale=None):
@@ -147,13 +131,35 @@ class HgMozillaOrg(object):
             Log.note("Got hg ({{branch}}, {{locale}}, {{revision}}) from ES", branch=doc.branch.name, locale=locale, revision=doc.changeset.id)
             return doc
 
-        output = Data(revision=None, signal=Signal())
-        worker = Thread.run("find "+revision.changeset.id, self._load_all_in_push, output, revision, locale)
-        worker.join()
-        if output.signal:
-            return output.revision
+        found_revision = copy(revision)
+        if isinstance(found_revision.branch, (text_type, binary_type)):
+            lower_name = found_revision.branch.lower()
         else:
-            Log.error("could not find revision {{revision}}", revision=revision)
+            lower_name = found_revision.branch.name.lower()
+
+        if not lower_name:
+            Log.error("Defective revision? {{rev|json}}", rev=found_revision.branch)
+
+        b = found_revision.branch = self.branches[(lower_name, locale)]
+        if not b:
+            b = found_revision.branch = self.branches[(lower_name, DEFAULT_LOCALE)]
+            if not b:
+                Log.error("can not find branch ({{branch}}, {{locale}})", branch=lower_name, locale=locale)
+
+        if Date.now() - Date(b.etl.timestamp) > _OLD_BRANCH:
+            self.branches = _hg_branches.get_branches(kwargs=self.settings)
+
+        pushes = self._get_pushlog(found_revision.branch, found_revision.changeset.id)
+        if len(pushes) != 1:
+            Log.error("do not know what to do")
+        push = pushes[0]
+
+        url = found_revision.branch.url.rstrip("/") + "/json-info?node=" + found_revision.changeset.id[0:12]
+        raw_revs = self._get_revision(url, found_revision.branch)
+        if len(raw_revs) != 1:
+            Log.error("do not know what to do")
+        output = self._normalize_revision(raw_revs.values()[0], found_revision, push)
+        return output
 
     def _get_from_elasticsearch(self, revision, locale=None):
         rev = revision.changeset.id
@@ -198,66 +204,27 @@ class HgMozillaOrg(object):
         else:
             return None
 
-    def _load_all_in_push(self, output, revision, locale=None, please_stop=False):
-        """
-        :param revision:  INCOMPLETE revision OBJECT 
-        :param locale: OPTIONAL LOCALE TO OVERRIDE WITH
-        :param output: DATA(revision, signal) TO INDICATE REQUESTED REVISION HAS BEEN FOUND (BUT THERE MAY BE MORE WORK TO DO)
-        :param please_stop: Signal TO STOP EARLY 
-        :return: 
-        """
-        # https://hg.mozilla.org/mozilla-central/json-pushes?full=1&changeset=57c461500a0c
-        found_revision = copy(revision)
-        if isinstance(found_revision.branch, basestring):
-            lower_name = found_revision.branch.lower()
-        else:
-            lower_name = found_revision.branch.name.lower()
+    @cache(duration=HOUR, lock=True)
+    def _get_revision(self, url, branch):
+        return self._get_and_retry(url, branch)
 
-        if not lower_name:
-            Log.error("Defective revision? {{rev|json}}", rev=found_revision.branch)
-
-        b = found_revision.branch = self.branches[(lower_name, locale)]
-        if not b:
-            b = found_revision.branch = self.branches[(lower_name, DEFAULT_LOCALE)]
-            if not b:
-                Log.error("can not find branch ({{branch}}, {{locale}})", branch=lower_name, locale=locale)
-
-        if Date.now() - Date(b.etl.timestamp) > _OLD_BRANCH:
-            self.branches = _hg_branches.get_branches( kwargs=self.settings)
-
-        url = found_revision.branch.url.rstrip("/") + "/json-pushes?full=1&changeset=" + found_revision.changeset.id
+    @cache(duration=HOUR, lock=True)
+    def _get_pushlog(self, branch, changeset_id):
+        url = branch.url.rstrip("/") + "/json-pushes?full=1&changeset=" + changeset_id
         Log.note(
-            "Reading pushlog for revision ({{branch}}, {{locale}}, {{changeset}}): {{url}}",
-            branch=found_revision.branch.name,
-            locale=locale,
-            changeset=found_revision.changeset.id,
-            url=url
+            "Reading pushlog for revision {{changeset}}): {{url}}",
+            urlh=branch.url,
+            changeset=changeset_id
+
         )
-
         with Explanation("Pulling pushlog from {{url}}", url=url):
-            data = self._get_and_retry(url, found_revision.branch)
+            data = self._get_and_retry(url, branch)
+            return [
+                Push(id=int(index), date=_push.date, user=_push.user)
+                for index, _push in data.items()
+            ]
 
-            for index, _push in data.items():
-                push = Push(id=int(index), date=_push.date, user=_push.user)
-
-                for _, ids in jx.groupby(_push.changesets.node, size=200):
-                    url_param = "&".join("node=" + c[0:12] for c in ids)
-                    url = found_revision.branch.url.rstrip("/") + "/json-info?" + url_param
-
-                    if url in last_called_url:
-                        Log.note("using previous http response")
-                        raw_revs = last_called_url[url]
-                    else:
-                        Log.note("Reading details from {{url}}", {"url": url})
-                        raw_revs = self._get_and_retry(url, found_revision.branch)
-                        last_called_url.clear()
-                        last_called_url[url] = raw_revs
-                    for r in raw_revs.values():
-                        Thread.run(r.node, self._normalize_revision, output, r, found_revision, push, please_stop=please_stop)
-
-            return output
-
-    def _normalize_revision(self, output, r, found_revision, push, please_stop):
+    def _normalize_revision(self, r, found_revision, push):
         rev = Revision(
             branch=found_revision.branch,
             index=r.rev,
@@ -273,28 +240,18 @@ class HgMozillaOrg(object):
             parents=unwraplist(r.parents),
             children=unwraplist(r.children),
             push=push,
-            etl={"timestamp": Date.now().unix}
+            etl={"timestamp": Date.now().unix, "machine": machine_metadata}
         )
         # ADD THE DIFF
         diff = self._get_unified_diff_from_hg(rev)
-        # if r.node.startswith("e5693cea1ec944ca0"):
-        #     File("tests/resources/big.patch").write(diff)
         rev.changeset.diff = diff_to_json(diff)
+
+        self.todo.extend(rev.changeset.parents)
+        self.todo.extend(rev.changeset.children)
 
         _id = coalesce(rev.changeset.id12, "") + "-" + rev.branch.name + "-" + coalesce(rev.branch.locale, DEFAULT_LOCALE)
         with self.es_locker:
-            self.todo.extend(rev.changeset.parents)
-            self.todo.extend(rev.changeset.children)
             self.es.add({"id": _id, "value": rev})
-        if r.node == found_revision.changeset.id:
-            output.revision = rev
-            output.signal.go()
-        elif r.node[0:12] == found_revision.changeset.id[0:12]:
-            output.revision = rev
-            output.signal.go()
-
-
-
 
         return rev
 
