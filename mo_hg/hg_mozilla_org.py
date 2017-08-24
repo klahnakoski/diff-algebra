@@ -24,7 +24,7 @@ from mo_math.randoms import Random
 from mo_threads import Thread, Lock, Queue, THREAD_STOP
 from mo_threads import Till
 from mo_times.dates import Date
-from mo_times.durations import SECOND, Duration, HOUR
+from mo_times.durations import SECOND, Duration, HOUR, MINUTE
 from pyLibrary import convert
 from pyLibrary.env import http, elasticsearch
 from pyLibrary.meta import cache
@@ -115,7 +115,8 @@ class HgMozillaOrg(object):
                         revisions.discard(r)
                     except Exception as _:
                         pass
-                # FIND ANY REMAINING
+
+                # FIND ANY BRANCH THAT MAY HAVE THIS REVISION
                 for r in list(revisions):
                     self._find_revision(r)
 
@@ -256,7 +257,7 @@ class HgMozillaOrg(object):
             etl={"timestamp": Date.now().unix, "machine": machine_metadata}
         )
         # ADD THE DIFF
-        rev.changeset.diff = self._get_unified_diff_from_hg(rev)
+        rev.changeset.diff = self._get_json_diff_from_hg(rev)
 
         self.todo.add((found_revision.branch, listwrap(rev.parents)))
         self.todo.add((found_revision.branch, listwrap(rev.children)))
@@ -356,13 +357,29 @@ class HgMozillaOrg(object):
             return int(match[0])
         return None
 
-    def _get_unified_diff_from_hg(self, revision):
+    def _get_json_diff_from_hg(self, revision):
         """
         :param revision: INCOMPLETE REVISION OBJECT 
         :return: 
         """
-        @cache(duration=HOUR, lock=True)
+        @cache(duration=MINUTE, lock=True)
         def inner(changeset_id):
+            try:
+                # ALWAYS TRY ES FIRST
+                response = self.es.search({
+                    "query": {"filtered": {
+                        "query": {"match_all": {}},
+                        "filter": {"and": [
+                            {"prefix": {"changeset.id": changeset_id[0:12]}}
+                        ]}
+                    }},
+                    "size": 1
+                })
+                json_diff = response.hits.hits[0]._source.changeset.diff
+                return json_diff
+            except Exception as e:
+                pass
+
             Log.note("get unified diff for {{revision|left(12)}}", revision=changeset_id)
             response = http.get(expand_template(GET_DIFF, {"location": revision.branch.url, "rev": changeset_id}))
             try:
