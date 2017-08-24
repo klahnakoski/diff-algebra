@@ -25,6 +25,10 @@
 		"trace":true,
 		"constants":{
 			"pyLibrary.env.http.default_headers": {"Referer": "https://github.com/klahnakoski/diff-algebra"}
-		}
+		},
+		"logs":[
+			{"type":"console"}
+
+		]
 	}
 }
