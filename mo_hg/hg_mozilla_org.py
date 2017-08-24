@@ -406,3 +406,8 @@ def _get_url(url, branch, **kwargs):
             Log.error("Unknown push {{revision}}", revision=strings.between(data, "'", "'"))
         branch.url = _trim(url)  #RECORD THIS SUCCESS IN THE BRANCH
         return data
+
+
+def simplify_repo(repo):
+    repo.changeset.files = None
+    repo.changest.diff = None
