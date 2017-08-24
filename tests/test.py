@@ -16,7 +16,6 @@ from mo_files import File
 from mo_json import value2json
 from mo_logs import constants, Log, startup
 from mo_testing.fuzzytestcase import FuzzyTestCase
-from mo_threads import Thread
 
 from mo_hg.hg_mozilla_org import HgMozillaOrg
 from mo_hg.parse import diff_to_json
@@ -75,7 +74,10 @@ class TestParsing(FuzzyTestCase):
         j1 = diff_to_json(File("tests/resources/diff1.patch").read())
         j2 = diff_to_json(File("tests/resources/diff2.patch").read())
 
-        self.assertEqual(j1, {})
+        e1 = File("tests/resources/diff1.json").read_json(flexible=False, leaves=False)
+        e2 = File("tests/resources/diff2.json").read_json(flexible=False, leaves=False)
+        self.assertEqual(j1, e1)
+        self.assertEqual(j2, e2)
 
     def test_big_changeset_to_json(self):
         j1 = diff_to_json(File("tests/resources/big.patch").read())
@@ -90,6 +92,7 @@ class TestParsing(FuzzyTestCase):
         # File("tests/resources/big.json").write(value2json(j1.changeset.diff, pretty=True))
         expected = File("tests/resources/big.json").read_json(flexible=False, leaves=False)
         self.assertEqual(j1.changeset.diff, expected)
+        # Till(seconds=10000).wait()
 
     def test_net_new_lines(self):
         file1, c1, file2, c2, file3 = self._data()

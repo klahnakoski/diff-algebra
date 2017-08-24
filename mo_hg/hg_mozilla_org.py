@@ -14,19 +14,15 @@ import re
 from copy import copy
 
 import mo_threads
-from BeautifulSoup import BeautifulSoup
 from future.utils import text_type, binary_type
-from jx_python import jx
-from mo_dots import set_default, Null, coalesce, unwraplist, Data
-from mo_files import File
+from mo_dots import set_default, Null, coalesce, unwraplist, listwrap
 from mo_kwargs import override
 from mo_logs import Log, strings, machine_metadata
 from mo_logs.exceptions import Explanation, assert_no_exception, Except
 from mo_logs.strings import expand_template
 from mo_math.randoms import Random
-from mo_threads import Thread, Lock, Queue, THREAD_STOP, Signal
+from mo_threads import Thread, Lock, Queue, THREAD_STOP
 from mo_threads import Till
-from mo_times import Timer
 from mo_times.dates import Date
 from mo_times.durations import SECOND, Duration, HOUR
 from pyLibrary import convert
@@ -108,9 +104,20 @@ class HgMozillaOrg(object):
     def _daemon(self, please_stop):
         while not please_stop:
             with Explanation("getting extra revision"):
-                r = self.todo.pop(till=please_stop)
-                output = Data(signal=Signal(), revision=None)
-                self._load_all_in_push(output, r, locale=None, please_stop=please_stop)
+                branch, revisions = self.todo.pop(till=please_stop)
+                revisions = set(revisions)
+
+                # FIND THE REVSIONS ON THIS BRANCH
+                for r in list(revisions):
+                    Log.note("Scanning {{branch}} {{revision|left(12)}}", branch=branch.name, revision=r)
+                    try:
+                        temp = self.get_revision(Revision(branch=branch, changeset={"id": r}))
+                        revisions.discard(r)
+                    except Exception as _:
+                        pass
+                # FIND ANY REMAINING
+                for r in list(revisions):
+                    self._find_revision(r)
 
     @cache(duration=HOUR, lock=True)
     def get_revision(self, revision, locale=None):
@@ -149,16 +156,11 @@ class HgMozillaOrg(object):
         if Date.now() - Date(b.etl.timestamp) > _OLD_BRANCH:
             self.branches = _hg_branches.get_branches(kwargs=self.settings)
 
-        pushes = self._get_pushlog(found_revision.branch, found_revision.changeset.id)
-        if len(pushes) != 1:
-            Log.error("do not know what to do")
-        push = pushes[0]
+        push = self._get_push(found_revision.branch, found_revision.changeset.id)
 
         url = found_revision.branch.url.rstrip("/") + "/json-info?node=" + found_revision.changeset.id[0:12]
-        raw_revs = self._get_revision(url, found_revision.branch)
-        if len(raw_revs) != 1:
-            Log.error("do not know what to do")
-        output = self._normalize_revision(raw_revs.values()[0], found_revision, push)
+        raw_rev = self._get_raw_revision(url, found_revision.branch)
+        output = self._normalize_revision(raw_rev, found_revision, push)
         return output
 
     def _get_from_elasticsearch(self, revision, locale=None):
@@ -205,26 +207,36 @@ class HgMozillaOrg(object):
             return None
 
     @cache(duration=HOUR, lock=True)
-    def _get_revision(self, url, branch):
-        return self._get_and_retry(url, branch)
+    def _get_raw_revision(self, url, branch):
+        raw_revs = self._get_and_retry(url, branch).values()
+        if len(raw_revs) != 1:
+            Log.error("do not know what to do")
+        return raw_revs[0]
 
     @cache(duration=HOUR, lock=True)
-    def _get_pushlog(self, branch, changeset_id):
+    def _get_push(self, branch, changeset_id):
         url = branch.url.rstrip("/") + "/json-pushes?full=1&changeset=" + changeset_id
         Log.note(
-            "Reading pushlog for revision {{changeset}}): {{url}}",
-            urlh=branch.url,
+            "Reading pushlog for revision {{changeset|left(12)}}): {{url}}",
+            url=branch.url,
             changeset=changeset_id
 
         )
         with Explanation("Pulling pushlog from {{url}}", url=url):
             data = self._get_and_retry(url, branch)
-            return [
+            pushes= [
                 Push(id=int(index), date=_push.date, user=_push.user)
                 for index, _push in data.items()
             ]
+        if len(pushes) != 1:
+            Log.error("do not know what to do")
+        return pushes[0]
 
     def _normalize_revision(self, r, found_revision, push):
+        new_names = set(r.keys()) - {"rev", "node", "user", "description", "date", "files", "backedoutby", "parents", "children", "branch", "tags"}
+        if new_names and not r.tags:
+            Log.warning("hg is returning new property names ({{names}})", names=new_names)
+
         rev = Revision(
             branch=found_revision.branch,
             index=r.rev,
@@ -235,7 +247,8 @@ class HgMozillaOrg(object):
                 description=strings.limit(r.description, 2000),
                 date=Date(r.date),
                 files=r.files,
-                backedoutby=r.backedoutby
+                backedoutby=r.backedoutby,
+                bug=self._extract_bug_id(r.description)
             ),
             parents=unwraplist(r.parents),
             children=unwraplist(r.children),
@@ -243,11 +256,10 @@ class HgMozillaOrg(object):
             etl={"timestamp": Date.now().unix, "machine": machine_metadata}
         )
         # ADD THE DIFF
-        diff = self._get_unified_diff_from_hg(rev)
-        rev.changeset.diff = diff_to_json(diff)
+        rev.changeset.diff = self._get_unified_diff_from_hg(rev)
 
-        self.todo.extend(rev.changeset.parents)
-        self.todo.extend(rev.changeset.children)
+        self.todo.add((found_revision.branch, listwrap(rev.parents)))
+        self.todo.add((found_revision.branch, listwrap(rev.children)))
 
         _id = coalesce(rev.changeset.id12, "") + "-" + rev.branch.name + "-" + coalesce(rev.branch.locale, DEFAULT_LOCALE)
         with self.es_locker:
@@ -301,11 +313,12 @@ class HgMozillaOrg(object):
         Log.error("Tried {{url}} twice.  Both failed.", {"url": url}, cause=[e, f])
 
     @cache(duration=HOUR, lock=True)
-    def find_changeset(self, revision, please_stop=False):
+    def _find_revision(self, revision):
+        please_stop = False
         locker = Lock()
         output = []
         queue = Queue("branches", max=2000)
-        queue.extend(self.branches)
+        queue.extend(b for b in self.branches if b.locale == DEFAULT_LOCALE)
         queue.add(THREAD_STOP)
 
         problems = []
@@ -315,11 +328,10 @@ class HgMozillaOrg(object):
                     return
                 try:
                     url = b.url + "json-info?node=" + revision
-                    response = http.get(url, timeout=30)
-                    if response.status_code == 200:
-                        with locker:
-                            output.append(b)
-                        Log.note("{{revision}} found at {{url}}", url=url, revision=revision)
+                    rev = self.get_revision(Revision(branch=b, changeset={"id": revision}))
+                    with locker:
+                        output.append(rev)
+                    Log.note("Revision found at{{url}}", url=url)
                 except Exception as f:
                     problems.append(f)
 
@@ -330,9 +342,6 @@ class HgMozillaOrg(object):
         for t in threads:
             with assert_no_exception:
                 t.join()
-
-        if problems:
-            Log.error("Could not scan for {{revision}}", revision=revision, cause=problems[0])
 
         return output
 
@@ -349,21 +358,23 @@ class HgMozillaOrg(object):
 
     def _get_unified_diff_from_hg(self, revision):
         """
-        :param revision: INOMPLETE REVISION OBJECT 
+        :param revision: INCOMPLETE REVISION OBJECT 
         :return: 
         """
-        response = http.get(expand_template(GET_DIFF, {"location": revision.branch.url, "rev": revision.changeset.id}))
-        try:
-            return response.content.decode("utf8", "replace")
-        except Exception as e:
-            Log.error("can not decode", cause=e)
+        @cache(duration=HOUR, lock=True)
+        def inner(changeset_id):
+            Log.note("get unified diff for {{revision|left(12)}}", revision=changeset_id)
+            response = http.get(expand_template(GET_DIFF, {"location": revision.branch.url, "rev": changeset_id}))
+            try:
+                diff = response.content.decode("utf8", "replace")
+                return diff_to_json(diff)
+            except Exception as e:
+                Log.error("can not decode", cause=e)
+        return inner(revision.changeset.id)
 
     def _get_source_code_from_hg(self, revision, file_path):
         response = http.get(expand_template(GET_FILE, {"location": revision.branch.url, "rev": revision.changeset.id, "path": file_path}))
         return response.content.decode("utf8", "replace")
-
-
-
 
 
 def _trim(url):
