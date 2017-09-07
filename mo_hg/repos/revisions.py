@@ -26,7 +26,7 @@ class Revision(Data):
 revision_schema = {
     "settings": {
         "index.number_of_replicas": 1,
-        "index.number_of_shards": 3
+        "index.number_of_shards": 12
     },
     "mappings": {
         "revision": {
@@ -94,7 +94,29 @@ revision_schema = {
                             "properties": {
                                 "changes": {
                                     "type": "nested",
-                                    "dynamic": "true"
+                                    "dynamic": True,
+                                    "properties": {
+                                        "new": {
+                                            "type": "object",
+                                            "dynamic": True,
+                                            "properties": {
+                                                "content": {
+                                                    "type": "string",
+                                                    "index": "no"
+                                                }
+                                            }
+                                        },
+                                        "old": {
+                                            "type": "object",
+                                            "dynamic": True,
+                                            "properties": {
+                                                "content": {
+                                                    "type": "string",
+                                                    "index": "no"
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
 
                             }

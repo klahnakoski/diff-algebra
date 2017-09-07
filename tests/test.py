@@ -85,14 +85,16 @@ class TestParsing(FuzzyTestCase):
         self.assertEqual(j1, expected)
 
     def test_changeset_to_json(self):
-        j1 = self.hg.get_revision(wrap({
-            "branch": {"name":"mozilla-central", "url": "https://hg.mozilla.org/mozilla-central"},
-            "changeset": {"id": "e5693cea1ec944ca0"}
-        }))
-        # File("tests/resources/big.json").write(value2json(j1.changeset.diff, pretty=True))
+        j1 = self.hg.get_revision(
+            wrap({
+                "branch": {"name": "mozilla-central", "url": "https://hg.mozilla.org/mozilla-central"},
+                "changeset": {"id": "e5693cea1ec944ca0"}
+            }),
+            None,  # Locale
+            True   # get_diff
+        )
         expected = File("tests/resources/big.json").read_json(flexible=False, leaves=False)
         self.assertEqual(j1.changeset.diff, expected)
-        # Till(seconds=10000).wait()
 
     def test_net_new_lines(self):
         file1, c1, file2, c2, file3 = self._data()
