@@ -9,7 +9,7 @@ We would like to estimate the coverage on a "target" revision using the coverage
 
 Furthermore, tests run at Firefox-scale have coverage variability because of environmental variability; which can include time of day, operating system latency, ordering of network responses, an many more.  Running a test will not likely get you the full coverage for the test, rather some subset. Multiple runs are required; and the results unioned 
 
-Even more: Coverage tests are very expensive to run; requiring 200 machines, and generating about 2gigs of data per run. Running coverage on every changeset is not an option, never mind multiple times to get a stable coverage number.
+Even more: Coverage tests are very expensive to run; requiring 200 machines, and generating about 20gigs of data per run. Running coverage on every changeset is not an option, nevermind multiple times to get a stable coverage number.
 
 ## A solution        
 
