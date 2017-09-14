@@ -25,6 +25,9 @@ With every revision, every file, and every line given a TID, we can map coverage
 
 The Firefox codebase is 2million lines of code, with about 300 changes made per day. Given a year of history, we would expect a database of TIDs to contain about 200billion `(coverage_revision, file, line, TID)` tuples. We will require a low-latency service that can provide this information, and a centralized server that is responsible for assigning TIDs to the net-new lines.
 
+### How can this fail?
+
+If a source file has added decision code, then a function may no longer be called. Past coverage mapped forward may wrongly conclude a function is covered. Similarly, removed decision code may make future coverage mapped to the past wrongly conclude a function is covered. There are probably other pathologies like this.
 
 ## Challenge
 

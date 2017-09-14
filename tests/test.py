@@ -40,7 +40,7 @@ class TestParsing(FuzzyTestCase):
     def setUp(self):
         self.hg = HgMozillaOrg(TestParsing.config)
 
-    def _data(self):
+    def _get_test_data(self):
         file1 = File("tests/resources/example_file_v1.py").read().split('\n')
         file2 = File("tests/resources/example_file_v2.py").read().split('\n')
         file3 = File("tests/resources/example_file_v3.py").read().split('\n')
@@ -59,7 +59,7 @@ class TestParsing(FuzzyTestCase):
         return file1, c1, file2, c2, file3
 
     def test_parse(self):
-        file1, c1, file2, c2, file3 = self._data()
+        file1, c1, file2, c2, file3 = self._get_test_data()
 
         coverage2 = np.matrix([1, 1, 0, 1, 1, 0, 0, 1, 1, 1, 0, 0], dtype=int)
 
@@ -97,7 +97,7 @@ class TestParsing(FuzzyTestCase):
         self.assertEqual(j1.changeset.diff, expected)
 
     def test_net_new_lines(self):
-        file1, c1, file2, c2, file3 = self._data()
+        file1, c1, file2, c2, file3 = self._get_test_data()
 
         # NET NEW LINES CAN BE EXTRACTED FROM A CHANGESET 1==New line, 0==Old line
         net_new_lines = (- np.sum(c1, 0)) + 1  # MAYBE THIS SHOULD BE A FUNCTION CALLED net_new_lines(changeset)
@@ -105,7 +105,7 @@ class TestParsing(FuzzyTestCase):
         self.assertEqual(net_new_lines.tolist(), [0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0])
 
     def test_net_new_percent(self):
-        file1, c1, file2, c2, file3 = self._data()
+        file1, c1, file2, c2, file3 = self._get_test_data()
 
         net_new_lines2 = (- np.sum(c1, 0)) + 1  # MAYBE THIS SHOULD BE A FUNCTION CALLED net_new_lines(changeset)
         num_net_new_lines = np.sum(net_new_lines2)
@@ -120,7 +120,7 @@ class TestParsing(FuzzyTestCase):
         self.assertEqual(net_new_percent, 0.5)
 
     def test_percent_using_future_coverage(self):
-        file1, c1, file2, c2, file3 = self._data()
+        file1, c1, file2, c2, file3 = self._get_test_data()
 
         # WE ARE GIVEN FUTURE COVERAGE
         coverage3 = np.matrix([1, 1, 1, 1, 1, 1, 1, 1, 1], dtype=int)
