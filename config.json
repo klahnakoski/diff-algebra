@@ -24,7 +24,8 @@
 	"debug":{
 		"trace":true,
 		"constants":{
-			"pyLibrary.env.http.default_headers": {"Referer": "https://github.com/klahnakoski/diff-algebra"}
+			"pyLibrary.env.http.default_headers": {"Referer": "https://github.com/klahnakoski/diff-algebra"},
+			"mo_hg.hg_mozilla_org.MAX_DIFF_SIZE":1000000
 		},
 		"logs":[
 			{"type":"console"}
