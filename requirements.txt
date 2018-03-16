@@ -1,5 +1,4 @@
-future
+mo-future
 pyLibrary
-BeautifulSoup
+BeautifulSoup4
 numpy
-scipy

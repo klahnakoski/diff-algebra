@@ -24,58 +24,42 @@ class Revision(Data):
 
 
 revision_schema = {
+
+
     "settings": {
         "index.number_of_replicas": 1,
-        "index.number_of_shards": 12
+        "index.number_of_shards": 6,
+        "analysis": {
+            "tokenizer": {
+                "left250": {
+                    "type": "pattern",
+                    "pattern": "^.{1,250}"
+                }
+            },
+            "analyzer": {
+                "description_limit": {
+                    "type": "custom",
+                    "tokenizer": "left250",
+                    "filter": [
+                        "lowercase",
+                        "asciifolding"
+                    ]
+                }
+            }
+        }
     },
     "mappings": {
         "revision": {
-            "_source": {
-                "compress": False
-            },
-            "_id": {
-                "index": "not_analyzed",
-                "type": "string",
-                "store": True
-            },
             "_all": {
                 "enabled": False
-            },
-            "_routing": {
-                "required": True,
-                "path": "changeset.id12"
             },
             "dynamic_templates": [
                 {
                     "default_strings": {
                         "mapping": {
-                            "index": "not_analyzed",
-                            "type": "string",
-                            "doc_values": True
+                            "type": "keyword"
                         },
                         "match_mapping_type": "string",
-                        "match": "*"
-                    }
-                },
-                {
-                    "default_longs": {
-                        "mapping": {
-                            "index": "not_analyzed",
-                            "type": "long",
-                            "doc_values": True
-                        },
-                        "match_mapping_type": "long",
-                        "match": "*"
-                    }
-                },
-                {
-                    "default_integers": {
-                        "mapping": {
-                            "index": "not_analyzed",
-                            "type": "long",
-                            "doc_values": True
-                        },
-                        "match_mapping_type": "integer",
                         "match": "*"
                     }
                 }
@@ -85,8 +69,14 @@ revision_schema = {
                     "type": "object",
                     "properties": {
                         "description": {
-                            "index": "analyzed",
-                            "type": "string"
+                            "index": True,
+                            "type": "text",
+                            "fields": {
+                                "raw": {
+                                    "type": "text",
+                                    "analyzer": "description_limit"
+                                }
+                            }
                         },
                         "diff": {
                             "type": "nested",
@@ -101,8 +91,7 @@ revision_schema = {
                                             "dynamic": True,
                                             "properties": {
                                                 "content": {
-                                                    "type": "string",
-                                                    "index": "no"
+                                                    "type": "keyword"
                                                 }
                                             }
                                         },
@@ -111,8 +100,7 @@ revision_schema = {
                                             "dynamic": True,
                                             "properties": {
                                                 "content": {
-                                                    "type": "string",
-                                                    "index": "no"
+                                                    "type": "keyword"
                                                 }
                                             }
                                         }

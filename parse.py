@@ -11,8 +11,11 @@ from __future__ import unicode_literals
 import re
 
 import numpy as np
-from mo_logs import Log
+from mo_dots import Data
+from mo_logs import Log, startup, constants
 from numpy import copy
+
+from mo_hg.hg_mozilla_org import HgMozillaOrg
 
 GET_DIFF = "{{location}}/rev/{{rev}}"
 GET_FILE = "{{location}}/file/{{rev}}{{path}}"
@@ -32,10 +35,10 @@ no_change = MOVE[' ']
 
 def parse_changeset_to_matrix(branch, changeset_id, new_source_code=None):
     """
-    :param branch:  Data with `url` parameter pointing to hg instance 
-    :param changeset_id:   
-    :param new_source_code:  for testing - provide the resulting file (for file length only) 
-    :return: 
+    :param branch:  Data with `url` parameter pointing to hg instance
+    :param changeset_id:
+    :param new_source_code:  for testing - provide the resulting file (for file length only)
+    :return:
     """
     diff = _get_changeset(branch, changeset_id)
     map = _parse_diff(diff, new_source_code)
@@ -44,9 +47,9 @@ def parse_changeset_to_matrix(branch, changeset_id, new_source_code=None):
 
 def parse_diff_to_matrix(diff, new_source_code=None):
     """
-    :param diff:  textual diff 
-    :param new_source_code:  for testing - provide the resulting file (for file length only) 
-    :return: 
+    :param diff:  textual diff
+    :param new_source_code:  for testing - provide the resulting file (for file length only)
+    :return:
     """
     return _map_to_matrix(_parse_diff(diff, new_source_code))
 
@@ -64,7 +67,7 @@ def _map_to_matrix(map):
 def parse_to_map(branch, changeset_id):
     """
     MATRICIES ARE O(n^2), WE NEED A O(n) SOLUTION
-    
+
     :param branch: OBJECT TO DESCRIBE THE BRANCH TO PULL INFO
     :param changeset_id: THE REVISION NUMEBR OF THE CHANGESET
     :return:  MAP FROM FULL PATH TO OPERATOR
@@ -84,7 +87,7 @@ def _parse_diff(changeset, new_source_code=None):
     """
     :param branch: OBJECT TO DESCRIBE THE BRANCH TO PULL INFO
     :param changeset: THE DIFF TEXT CONTENT
-    :param new_source_code:  for testing - provide the resulting file (for file length only) 
+    :param new_source_code:  for testing - provide the resulting file (for file length only)
     :return:  MAP FROM FULL PATH TO LIST OF COORINATES
     """
     output = {}
@@ -129,3 +132,22 @@ def _parse_diff(changeset, new_source_code=None):
 
         output[file_path] = coord
     return output
+
+
+config = None
+hg = None
+
+def main():
+    global config
+    global hg
+    try:
+        config = startup.read_settings()
+        constants.set(config.constants)
+        hg =  HgMozillaOrg(config)
+        Log.start(config.debug)
+
+    except Exception as e:
+        Log.error("Problem with etl", e)
+
+if __name__ == "__main__":
+    main()
